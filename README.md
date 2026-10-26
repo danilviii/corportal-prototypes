@@ -1,2 +1,5 @@
-# corportal-prototypes
-Interactive HTML prototypes of the corporate portal — GP-3129 requests
+# Прототип заявок корпоративного портала
+
+Кликабельный HTML-прототип GP-3129. Демонстрационные данные сохраняются только в браузере через localStorage. Подключения к API портала и реальной отправки писем нет.
+
+Опубликованная сборка находится в index.html.
