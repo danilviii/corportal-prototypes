@@ -1,0 +1,38 @@
+/* ---------- mobile (container query, 375 px) ---------- */
+@container app (max-width: 700px){
+  .rail,.side{display:none}
+  .main{padding:0}
+  .crumbs{display:none}
+  .panel{border-radius:0;border:0}
+  .mhead{display:flex;flex-direction:column;background:#fff;border-bottom:1px solid var(--border)}
+  .mhead .mt{display:flex;align-items:center;gap:6px;padding:8px 10px}
+  .mhead .mt b{flex:1;font-size:15px}
+  .mhead .mnav{display:flex;gap:4px;overflow-x:auto;padding:0 10px 8px;scrollbar-width:none}
+  .mhead .mnav::-webkit-scrollbar{display:none}
+  .phead{padding:10px 12px 6px}
+  .phead h1{font-size:17px}
+  .phead .hide-m,.ptabs.hide-m{display:none}
+  .toolbar{padding:6px 12px}
+  .tbl thead{display:none}
+  .tbl,.tbl tbody,.tbl tr,.tbl td{display:block;width:100%}
+  .tbl tr{padding:10px 12px;border-bottom:1px solid var(--border)}
+  .tbl td{border:0;padding:1px 0;max-width:none!important}
+  .tbl td.tt .ttx{white-space:normal}
+  .tbl td[data-l]:before{content:attr(data-l) ": ";color:var(--muted);font-weight:600}
+  .tbl td.m-hide{display:none}
+  .ovl{padding:0;align-items:stretch}
+  .mdl,.rc,.rc.simple{width:100%;max-height:none;height:100%;border-radius:0}
+  .rcb{display:block;overflow:auto}
+  .rcl{overflow:visible;padding:10px}
+  .rcr{border-left:0;border-top:1px solid var(--border)}
+  .cmts{overflow:visible}
+  .props{grid-template-columns:1fr}
+  .prop{grid-template-columns:110px minmax(0,1fr)}
+  .fl{grid-template-columns:1fr;gap:2px}
+  .fl .k{padding-top:0}
+  .notif{left:6px;right:6px;width:auto;max-width:none}
+  .grid2{grid-template-columns:1fr}
+  .kb{flex-direction:column}
+  .kcol{width:100%;flex:none}
+  .empty{padding:40px 16px}
+}
