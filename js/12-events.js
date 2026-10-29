@@ -20,14 +20,13 @@ const A = {
   'menu-link': () => { UI.menu = false; render(); const s = document.querySelector('[data-c="link-add"]'); if (s) s.focus(); },
   ctab: el => { UI.cardTab = el.dataset.v; render(); },
   help: () => A['new-req']({dataset:{}}),
-  'new-req-type': el => { const t=typ(el.dataset.tid); if(!t||t.hidden)return; UI.submit={pid:t.projectId,tid:t.id,q:'',vals:{},errors:{}};render(); },
-  'new-req': el => { UI.notifOpen = false; UI.submit = {pid: el.dataset.pid || null, tid: null, q: '', vals: {}, errors: {}}; UI.submitRouteSeen=null; if(route().parts[1]==='new') go('/requests/mine'); else render(); const s = document.getElementById('sSearch'); if (s) s.focus(); },
+  'new-req': el => openSubmit(el.dataset.pid),
   's-space': el => { const st = UI.submit; st.closed = st.closed || {}; st.closed[el.dataset.sid] = !st.closed[el.dataset.sid]; render(); },
-  's-proj': el => { UI.submit.pid = el.dataset.pid; UI.submit.tid = null; render(); },
-  's-step': el => { const st = UI.submit; if (el.dataset.v === '1') { st.pid = null; st.q = ''; } st.tid = null; st.vals = {}; st.errors = {}; render(); const s = document.getElementById('sSearch'); if (s) s.focus(); },
-  's-type': el => { UI.submit.tid = el.dataset.tid; UI.submit.pid = typ(el.dataset.tid).projectId; UI.submit.vals = {}; UI.submit.errors = {}; render(); },
-  's-change': () => { UI.submit.tid = null; UI.submit.vals = {}; UI.submit.errors = {}; render(); },
-  's-close': () => { UI.submit = null; render(); },
+  's-proj': el => setQ({new: el.dataset.pid}),
+  's-step': el => { const st = UI.submit; if (el.dataset.v === '1') { st.q = ''; UI._focusSearch = true; setQ({new: '1'}); } else setQ({new: st.pid}); },
+  's-type': el => setQ({new: el.dataset.tid}),
+  's-change': () => setQ({new: UI.submit.pid}),
+  's-close': () => closeSubmit(),
   's-send': () => doSubmit(),
   's-att-rm': el => { readSubmitVals(); UI.submit.vals._files.splice(+el.dataset.i, 1); render(); },
   take: el => {
@@ -193,13 +192,12 @@ const A = {
   'scen-go': el => {
     const st = SCEN[+el.dataset.i].steps[+el.dataset.j];
     const hp = st.need === 'hrdocs' ? hrDocs() : null;
-    const h = hp ? st.h.replace('hrdocs', hp.id) : st.h;
+    let h = hp ? st.h.replace('hrdocs', hp.id) : st.h;
+    if (st.open === 'submit' || (st.open || '').startsWith('submit:')) h = href(h.slice(1), {new: st.open.split(':')[1] || '1'});
     UI.submit = UI.picker = UI.confirm = UI.typeDraft = UI.spModal = UI.spMenu = UI.pjModal = UI.pjMenu = UI.adminNew = UI.adminEdit = null; UI.notifOpen = false; UI.menu = false; UI.cardTab = 'comments';
     UI.user = st.u;
     if (location.hash !== h) location.hash = h;
     setTimeout(() => {
-      if (st.open === 'submit') UI.submit = {pid:null, tid:null, q:'', vals:{}, errors:{}};
-      if (st.open && st.open.startsWith('submit:')) UI.submit = {pid:typ(st.open.slice(7)).projectId, tid:st.open.slice(7), q:'', vals:{}, errors:{}};
       if (st.open === 'notif') UI.notifOpen = true;
       if (st.open === 'admin-hr') UI.adminNew = {kind:'project', sid:'hr', v:{sid:'hr', name:'Кадровое делопроизводство', lead:'elena', type:'Справка', fields:[]}};
       if (st.open === 'hr-type') { const x = S.types.find(y => y.projectId === hp.id && y.name === 'Справка') || visibleTypes(hp.id)[0]; if (x) A['type-edit']({dataset:{id:x.id}}); }
@@ -225,7 +223,8 @@ function syncDraftName(){ const i = document.getElementById('tdName'); if (i && 
 function switchUser(u){
   if (!u) return;
   UI.user = u; UI.submit = UI.picker = UI.confirm = UI.typeDraft = UI.spModal = UI.spMenu = UI.pjModal = UI.pjMenu = UI.adminNew = UI.adminEdit = null; UI.notifOpen = false; UI.menu = false; UI.cardTab = 'comments';
-  render(); toast(`Вы смотрите как ${pname(u)} — ${person(u).pos}`);
+  if (route().q.new) closeSubmit(); else render();
+  toast(`Вы смотрите как ${pname(u)} — ${person(u).pos}`);
 }
 
 document.addEventListener('click', e => {
@@ -391,7 +390,7 @@ document.addEventListener('keydown', e => {
     else if (UI.spModal) closeSpaceModal();
     else if (UI.pjModal) { if (UI.typeDraft) { UI.typeDraft = null; render(); } else closeProjModal(); }
     else if (UI.picker) { UI.picker = null; render(); }
-    else if (UI.submit) { UI.submit = null; render(); }
+    else if (UI.submit) closeSubmit();
     else if (route().q.card) A['close-card']();
     else if (UI.notifOpen) { UI.notifOpen = false; render(); }
   }

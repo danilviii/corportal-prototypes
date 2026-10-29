@@ -2,6 +2,21 @@
 /* ======================================================================
    Submit dialog (FR-7…FR-9, FR-24, FR-30)
    ====================================================================== */
+/* The dialog step lives in the URL over the current page: ?new=1 — project, ?new=<projectId> — type, ?new=<typeId> — form.
+   A direct link from the chat bot is #/requests/mine?new=<typeId>. */
+function openSubmit(target){ UI.notifOpen = false; UI._focusSearch = true; setQ({new: target || '1'}); }
+function closeSubmit(){ if (route().q.new) setQ({new: null}); }
+function syncSubmit(r){
+  const v = r.q.new;
+  if (!v) { UI.submit = null; return; }
+  const t = typ(v), p = !t && proj(v);
+  const okType = t && !t.hidden && proj(t.projectId);
+  const st = UI.submit || (UI.submit = {q: '', vals: {}, errors: {}});
+  const tid = okType ? t.id : null, pid = okType ? t.projectId : p ? p.id : null;
+  if (st.tid !== tid) { st.vals = {}; st.errors = {}; }
+  st.tid = tid; st.pid = pid;
+  st.notice = v !== '1' && !okType && !p ? 'Тип заявки по ссылке скрыт или больше недоступен. Выберите другой тип.' : null;
+}
 function hl(text, q){ if (!q) return esc(text); const i = text.toLowerCase().indexOf(q.toLowerCase()); if (i < 0) return esc(text); return esc(text.slice(0,i)) + '<mark>' + esc(text.slice(i, i+q.length)) + '</mark>' + esc(text.slice(i+q.length)); }
 function submitProjects(){ return S.spaces.map(s => ({s, ps: S.projects.filter(p => p.spaceId === s.id && visibleTypes(p.id).length)})).filter(g => g.ps.length); }
 function submitList(){
@@ -31,7 +46,7 @@ function renderSubmit(){
   const step = st.tid ? 3 : st.pid ? 2 : 1;
   let body, foot;
   if (step === 1) {
-    body = `<h3 class="sq">Куда подать заявку?</h3><div class="hint" style="margin:0 0 10px">Найдите пространство и выберите в нём проект, который решит вашу задачу. Или сразу найдите тип заявки поиском ${fr(8)}</div>
+    body = `${st.notice ? `<div class="note warn" style="margin-bottom:12px">${icon('lock',16)}<div style="flex:1">${esc(st.notice)}</div></div>` : ''}<h3 class="sq">Куда подать заявку?</h3><div class="hint" style="margin:0 0 10px">Найдите пространство и выберите в нём проект, который решит вашу задачу. Или сразу найдите тип заявки поиском ${fr(8)}</div>
       <div style="position:relative;margin-bottom:14px"><span style="position:absolute;left:10px;top:8px;color:var(--muted)">${icon('search',15)}</span>
         <input class="inp w100" id="sSearch" data-i="s-search" placeholder="Поиск: например, «1С» или «доступ»" value="${esc(st.q||'')}" style="padding-left:32px"></div>
       <div id="sList">${submitList()}</div>`;
@@ -77,7 +92,7 @@ function readSubmitVals(){
 }
 function doSubmit(){
   readSubmitVals();
-  const st = UI.submit; const t = typ(st.tid); if(!t||t.hidden||!proj(t.projectId)){UI.submit=null;toast('Тип заявки больше недоступен. Выберите другой тип');render();return;} const v = st.vals; const errors = {};
+  const st = UI.submit; const t = typ(st.tid); if(!t||t.hidden||!proj(t.projectId)){toast('Тип заявки больше недоступен. Выберите другой тип');setQ({new:'1'});return;} const v = st.vals; const errors = {};
   if (!v.title || !v.title.trim()) errors.title = 'Заполните название';
   typeFields(t).forEach(x => { if (x.r && isEmpty(v[x.f])) errors[x.f] = 'Обязательное поле'; });
   st.errors = errors;
@@ -95,5 +110,5 @@ function doSubmit(){
   UI.submit = null;
   toast(t.exec.length ? `Заявка №${r.id} создана. Письмо «Пришла новая заявка» отправлено: ${t.exec.map(pname).join(', ')}` : `Заявка №${r.id} создана без исполнителя и ждёт в очереди проекта`);
   const cur = route();
-  if (cur.parts[0] !== 'requests' || cur.parts[1] === 'new') go('/requests/mine', {card: r.id}); else setQ({card: r.id});
+  if (cur.parts[0] !== 'requests') go('/requests/mine', {card: r.id}); else setQ({new: null, card: r.id});
 }

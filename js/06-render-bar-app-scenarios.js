@@ -33,6 +33,7 @@ function unreadCount(){ return S.notifs.filter(n => n.to === me() && !n.read).le
 function renderApp(){
   const r = route();
   const sec = r.parts[0] || 'requests';
+  syncSubmit(r);
   let mainHtml;
   try { mainHtml = renderMain(r); } catch(e) { console.error(e); mainHtml = `<div class="panel"><div class="pad">Ошибка отрисовки: ${esc(e.message)}</div></div>`; }
   const u = me();
@@ -68,6 +69,7 @@ function renderApp(){
     <div class="toasts" id="toasts"></div>`;
   renderToasts();
   const ci = document.getElementById('cmtText'); if (ci && UI._focusCmt) { ci.focus(); UI._focusCmt = false; }
+  const si = document.getElementById('sSearch'); if (si && UI._focusSearch) { si.focus(); UI._focusSearch = false; }
 }
 function renderToasts(){ const el = document.getElementById('toasts'); if (el) el.innerHTML = UI.toasts.map(t => `<div class="toast">${t.text}</div>`).join(''); }
 

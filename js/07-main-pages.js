@@ -7,17 +7,10 @@ function crumbs(list){ return `<div class="crumbs">${list.map((c,i) => i < list.
 function denied(text){ return `<div class="panel"><div class="empty"><div class="eic">${icon('lock',24)}</div><h4>Нет доступа</h4><p>${text}</p></div></div>`; }
 
 function renderMain(r){
-  if (r.path !== "/requests/new" && UI.submitRouteSeen) { UI.submitRouteSeen=null; UI.submit=null; }
   const sec = r.parts[0] || 'requests';
   if (sec !== 'requests') return renderStub(sec);
   const v = r.parts[1] || 'mine';
-  if (v === 'new') {
-    const t=typ(r.q.type), p=t&&proj(t.projectId);
-    if (!t || t.hidden || !p) { if(UI.submit && UI.submit.tid) UI.submit=null; UI.submitRouteSeen=location.hash; return `<div class="panel pad"><h1>Тип заявки недоступен</h1><p>Этот тип скрыт или больше недоступен. Выберите другой тип.</p><button class="btn btn-p" data-a="new-req">Новая заявка</button></div>`; }
-    const key=location.hash;
-    if (UI.submitRouteSeen!==key) { UI.submitRouteSeen=key; UI.submit={pid:p.id,tid:t.id,q:'',vals:{},errors:{}}; }
-    return `<div class="panel pad"><h1>Подача заявки</h1><p>${esc(p.name)} · ${esc(t.name)}</p><button class="btn btn-p" data-a="new-req-type" data-tid="${t.id}">Открыть форму</button></div>`;
-  }
+  if (v === 'new') { location.replace(href('/requests/mine', {new: r.q.type || '1'})); return ''; }
   if (['mine','participant','executor'].includes(v)) return renderList(v);
   if (v === 'queues') {
     if (r.parts[2] === 'project') return renderProjectQueue(r.parts[3], r.q);
@@ -387,7 +380,7 @@ function pmTypeEditor(p){
   const avail = S.fields.filter(f => f.spaceId === p.spaceId && !f.hidden && !used.includes(f.id));
   const execCand = uniq([p.leadId, ...p.memberIds]).filter(x => !d.exec.includes(x));
   return `<button class="btn btn-g btn-sm" data-a="type-cancel" style="margin:-4px 0 10px -6px">${icon('left',13)}Все типы заявок</button>
-    ${d.id ? `<div class="hint" style="margin-bottom:10px"><a href="${href('/requests/new',{type:d.id})}">Открыть форму этого типа</a> · пример прямой ссылки для чат-бота ${fr(32)}</div>` : ''}
+    ${d.id ? `<div class="hint" style="margin-bottom:10px"><a href="${href('/requests/mine',{new:d.id})}" target="_blank" rel="noopener">Открыть форму этого типа</a> · пример прямой ссылки для чат-бота ${fr(32)}</div>` : ''}
     <div class="frow"><label class="lbl2">Название типа<span class="req">*</span></label><input class="inp w100 ${UI.typeErr?'err':''}" id="tdName" value="${esc(d.name)}" placeholder="Например, «Справка»">${UI.typeErr?`<div class="errt">${UI.typeErr}</div>`:''}</div>
     <div class="frow"><label class="lbl2">Поля формы ${fr(13)}</label>
       <div class="stbl"><table><thead><tr><th class="gcol"></th><th>Поле</th><th style="width:140px">Тип поля</th><th style="width:130px">Обязательное</th><th class="acol"></th></tr></thead><tbody>
