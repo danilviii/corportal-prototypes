@@ -1,0 +1,10 @@
+/* ---------- cards / sections ---------- */
+.box{border:1px solid var(--border);border-radius:12px;background:#fff}
+.box + .box{margin-top:10px}
+.boxh{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--border);flex-wrap:wrap}
+.boxh h3{margin:0;font-size:13.5px;font-weight:700}
+.boxb{padding:10px 12px}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.qrow{display:flex;align-items:center;gap:10px;padding:9px 12px;border-top:1px solid var(--border);cursor:pointer}
+.qrow:hover{background:var(--bg-2)}
+.qrow:first-child{border-top:0}
