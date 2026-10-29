@@ -11,7 +11,7 @@ const A = {
   ph: () => { UI.ph = !UI.ph; render(); },
   scen: () => { UI.scen = !UI.scen; render(); },
   reset: () => { if (!confirm('Сбросить все данные прототипа к исходным?')) return; S = seed(); UI.submit = UI.picker = UI.confirm = UI.typeDraft = UI.spModal = UI.spMenu = UI.pjModal = UI.pjMenu = null; UI.notifOpen = false; localStorage.removeItem(LS_KEY); go('/requests/mine'); toast('Данные сброшены'); },
-  'open-num': () => { const n = document.getElementById('openNum').value.trim().replace('#',''); if (n) { const r = route(); if (r.parts[0] !== 'requests') go('/requests/mine', {card:n}); else setQ({card:n}); } },
+  'open-num': () => { const n = document.getElementById('openNum').value.trim().replace('#',''); if (n) { setQ({card:n}); } },
   card: el => { UI.cardTab = 'comments'; UI.cmtFiles = []; setQ({card: el.dataset.id}); },
   'close-card': () => { UI.menu = false; setQ({card: null}); },
   'close-card-bg': (el, e) => { if (e.target === el) A['close-card'](); },
@@ -32,7 +32,7 @@ const A = {
   take: el => {
     const r = req(el.dataset.id), u = me();
     r.executorIds.push(u); hist(r, u, 'взял(а) заявку в работу'); nExecutors(r, u, [u], []);
-    toast('Вы исполнитель заявки. Она появилась в «Я исполнитель». Заявитель об этом не узнает'); render();
+    toast('Вы исполнитель заявки. Она появилась в «Мои задачи» с фильтром «Показывать заявки». Заявитель об этом не узнает'); render();
   },
   'cf-yes': () => { const c = UI.confirm; UI.confirm = null; c.run(); render(); },
   'cf-no': () => { UI.confirm = null; render(); },
@@ -63,7 +63,7 @@ const A = {
   'exec-self': el => {
     const r = req(el.dataset.id), u = me();
     if (!r.executorIds.includes(u) || isDone(r)) return;
-    UI.confirm = {title:'Снять себя с заявки?', text:'Вы перестанете быть исполнителем: заявка пропадёт из «Я исполнитель». Других исполнителей снимают руководитель проекта и руководитель пространства.', ok:'Снять себя', run: () => {
+    UI.confirm = {title:'Снять себя с заявки?', text:'Вы перестанете быть исполнителем: заявка пропадёт из «Мои задачи». Других исполнителей снимают руководитель проекта и руководитель пространства.', ok:'Снять себя', run: () => {
       r.executorIds = r.executorIds.filter(e => e !== u); hist(r, u, 'снял(а) себя с исполнителей'); nExecutors(r, u, [], [u]); toast('Вы больше не исполнитель заявки'); }};
     render();
   },
@@ -88,21 +88,21 @@ const A = {
   'n-readall': () => { S.notifs.forEach(n => { if (n.to === me()) n.read = true; }); render(); },
   'n-open': el => {
     const n = S.notifs.find(x => x.id === el.dataset.id); n.read = true; UI.notifOpen = false;
-    const r = route(); if (r.parts[0] !== 'requests') go('/requests/mine', {card:n.req}); else setQ({card:n.req});
+    setQ({card:n.req});
   },
   qview: el => setQ({view: el.dataset.v === 'list' ? null : el.dataset.v}),
   'flt-clear': () => setQ({proj:null, type:null, status:null, ff:null, fv:null, noexec:null}),
   ptab: el => { UI.typeDraft = null; setQ({tab: el.dataset.v}); },
   'sp-menu': el => { UI.pjMenu = null; UI.spMenu = UI.spMenu === el.dataset.sid ? null : el.dataset.sid; render(); },
   'pj-menu': el => { UI.spMenu = null; UI.pjMenu = UI.pjMenu === el.dataset.pid ? null : el.dataset.pid; render(); },
-  'pj-copy': el => { UI.pjMenu = null; const url = location.href.split('#')[0] + '#/requests/queues/project/' + el.dataset.pid; try { navigator.clipboard.writeText(url); } catch(e) {} toast('Ссылка скопирована'); render(); },
+  'pj-copy': el => { UI.pjMenu = null; const url = location.href.split('#')[0] + '#/projects/' + el.dataset.pid; try { navigator.clipboard.writeText(url); } catch(e) {} toast('Ссылка скопирована'); render(); },
   'pj-open': el => { openProjModal(el.dataset.pid, el.dataset.tab); render(); },
   'pm-bg': () => closeProjModal(),
   'pm-close': () => closeProjModal(),
   'pm-tab': el => { UI.pjModal.tab = el.dataset.v; render(); },
   'pm-general-save': () => { const d=UI.pjModal; if(!canProjSettings(me(),d.pid)) return; const raw=document.getElementById('projectDeadlineDays').value.trim(); d.deadlineDays=raw; const end=new Date();end.setDate(end.getDate() + Number(raw)); if(raw!=='' && (!Number.isSafeInteger(+raw)||+raw<1||Number.isNaN(end.getTime()))) {d.err='Укажите целое число дней от 1 в допустимом диапазоне дат или оставьте поле пустым';render();return;} proj(d.pid).deadlineDays=raw===''?null:+raw; d.err=null; toast('Настройки проекта сохранены. Прежние сроки заявок не изменились'); render(); },
   'sp-newtab': el => { UI.spMenu = UI.pjMenu = null; toast('В продукте пространство откроется в новой вкладке браузера'); render(); },
-  'sp-copy': el => { UI.spMenu = null; const url = location.href.split('#')[0] + '#/requests/queues/space/' + el.dataset.sid; try { navigator.clipboard.writeText(url); } catch(e) {} toast('Ссылка скопирована'); render(); },
+  'sp-copy': el => { UI.spMenu = null; const url = location.href.split('#')[0] + '#/spaces/' + el.dataset.sid; try { navigator.clipboard.writeText(url); } catch(e) {} toast('Ссылка скопирована'); render(); },
   'sp-open': el => { openSpaceModal(el.dataset.sid, el.dataset.tab); render(); },
   'sm-bg': () => closeSpaceModal(),
   'sm-cancel': () => closeSpaceModal(),
@@ -161,7 +161,7 @@ const A = {
     const k = el.dataset.k, id = el.dataset.id, o = k === 'space' ? space(id) : proj(id);
     const n = k === 'space' ? S.projects.filter(p => p.spaceId === id).length : S.requests.filter(r => r.projectId === id).length;
     UI.confirm = {title: k === 'space' ? `Архивировать пространство «${o.name}»?` : `Архивировать проект «${o.name}»?`,
-      text: (k === 'space' ? `Пространство и ${n} ${plural(n,'его проект','его проекта','его проектов')} пропадут из окна подачи, «Очередей проектов» и списков заявок.` : `Проект и ${n} ${plural(n,'заявка','заявки','заявок')} пропадут из окна подачи, «Очередей проектов» и списков заявок.`) + ' Восстановить можно здесь же, включив «Показывать архивные». Так же сейчас архивируются пространства и проекты трекера.',
+      text: (k === 'space' ? `Пространство и ${n} ${plural(n,'его проект','его проекта','его проектов')} пропадут из окна подачи, раздела «Задачи» и списков заявок.` : `Проект и ${n} ${plural(n,'заявка','заявки','заявок')} пропадут из окна подачи, раздела «Задачи» и списков заявок.`) + ' Восстановить можно здесь же, включив «Показывать архивные». Так же сейчас архивируются пространства и проекты трекера.',
       ok:'В архив', run: () => { const name = archiveItem(k, id); toast(`«${name}» в архиве`); }};
     render();
   },
@@ -250,6 +250,7 @@ document.addEventListener('change', e => {
     case 'ap-space': { const v=readAdminProject(); v.fields=[]; v.extraTypes.forEach(t=>t.fields=[]); render(); break; }
     case 'flt': { const patch = {[el.dataset.k]: el.value || null}; if (el.dataset.k === 'ff') patch.fv = null; setQ(patch); break; }
     case 'flt-noexec': setQ({noexec: el.checked ? '1' : null}); break;
+    case 'tasks-requests': setQ({requests: el.checked ? '1' : null}); break;
     case 'subs': { S.subs[u + ':' + el.dataset.pid] = el.checked; toast(el.checked ? `Подписка включена: вы будете получать уведомление о каждой новой заявке проекта «${proj(el.dataset.pid).name}»` : 'Подписка выключена'); render(); break; }
     case 'status': { changeStatus(req(el.dataset.id), el.value); render(); break; }
     case 'sm-st-type': { const d = UI.spModal, x = d.statuses[+el.dataset.i]; if (!finalLocked(d, x)) x.final = el.value === 'final'; render(); break; }

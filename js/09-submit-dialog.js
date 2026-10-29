@@ -109,6 +109,5 @@ function doSubmit(){
   nNew(r);
   UI.submit = null;
   toast(t.exec.length ? `Заявка №${r.id} создана. Письмо «Пришла новая заявка» отправлено: ${t.exec.map(pname).join(', ')}` : `Заявка №${r.id} создана без исполнителя и ждёт в очереди проекта`);
-  const cur = route();
-  if (cur.parts[0] !== 'requests') go('/requests/mine', {card: r.id}); else setQ({new: null, card: r.id});
+  setQ({new: null, card: r.id});
 }

@@ -6,37 +6,48 @@ const tip = text => `<span class="qh" tabindex="0" aria-label="${esc(text)}">${i
 function crumbs(list){ return `<div class="crumbs">${list.map((c,i) => i < list.length-1 ? `<a href="${c[1]}">${esc(c[0])}</a><span>/</span>` : `<b>${esc(c[0])}</b>`).join('')}</div>`; }
 function denied(text){ return `<div class="panel"><div class="empty"><div class="eic">${icon('lock',24)}</div><h4>Нет доступа</h4><p>${text}</p></div></div>`; }
 
+/* Request spaces and projects live in the tracker (#/spaces, #/projects); old request-section links lead there */
+function legacyPath(r){
+  const [a, b, c, d] = r.parts;
+  if (a !== 'requests') return null;
+  if (b === 'executor') return '/tasks?requests=1';
+  if (b === 'admin') return '/spaces';
+  if (b === 'queues') return c === 'project' && d ? '/projects/' + d : c === 'space' && d ? '/spaces/' + d : '/projects';
+  if ((b === 'space' || b === 'project') && c) return `/${b}s/${c}` + (d === 'settings' ? '/settings' : '');
+  return null;
+}
 function renderMain(r){
+  const old = legacyPath(r);
+  if (old) { const [path, qs] = old.split('?'); location.replace(href(path, {...Object.fromEntries(new URLSearchParams(qs || '')), ...r.q})); return ''; }
   const sec = r.parts[0] || 'requests';
-  if (sec !== 'requests') return renderStub(sec);
-  const v = r.parts[1] || 'mine';
-  if (v === 'new') { location.replace(href('/requests/mine', {new: r.q.type || '1'})); return ''; }
-  if (['mine','participant','executor'].includes(v)) return renderList(v);
-  if (v === 'queues') {
-    if (r.parts[2] === 'project') return renderProjectQueue(r.parts[3], r.q);
-    if (r.parts[2] === 'space') return renderSpaceQueue(r.parts[3], r.q);
-    return renderQueues(r.q);
+  const id = r.parts[1], settings = r.parts[2] === 'settings';
+  if (sec === 'requests') {
+    const v = id || 'mine';
+    if (v === 'new') { location.replace(href('/requests/mine', {new: r.q.type || '1'})); return ''; }
+    if (['mine','participant'].includes(v)) return renderList(v);
+    return denied('Страница не найдена.');
   }
-  if (v === 'space' && r.parts[3] === 'settings') {
-    if (canSpaceSettings(me(), r.parts[2]) && !UI.spModal) openSpaceModal(r.parts[2], r.q.tab);
-    return renderSpaceQueue(r.parts[2], {});
+  if (sec === 'spaces' && id) {
+    if (settings && canSpaceSettings(me(), id) && !UI.spModal) openSpaceModal(id, r.q.tab);
+    return renderSpaceQueue(id, settings ? {} : r.q);
   }
-  if (v === 'project' && r.parts[3] === 'settings') {
-    if (canProjSettings(me(), r.parts[2]) && !UI.pjModal) openProjModal(r.parts[2], r.q.tab);
-    return renderProjectQueue(r.parts[2], {});
+  if (sec === 'projects' && id) {
+    if (settings && canProjSettings(me(), id) && !UI.pjModal) openProjModal(id, r.q.tab);
+    return renderProjectQueue(id, settings ? {} : r.q);
   }
-  if (v === 'admin') return renderAdmin();
-  return denied('Страница не найдена.');
+  if (sec === 'spaces') return renderSpaces();
+  if (sec === 'projects') return renderProjects(r.q);
+  if (sec === 'tasks') return renderTasks(r.q);
+  return renderStub(sec);
 }
 
 function requestsTabs(active){
   const u = me();
-  const t = [['mine','Мои заявки'],['participant','Я участник запроса'],['executor','Я исполнитель']];
+  const t = [['mine','Мои заявки'],['participant','Я участник запроса']];
   return `<div class="ptabs hide-m">${t.map(([k,l]) => `<button class="ptab ${active===k?'on':''}" data-a="nav" data-h="#/requests/${k}">${l}<span class="cnt">${listFor(u,k).length}</span></button>`).join('')}
-    ${queueTree(u).length ? `<button class="ptab ${active==='queues'?'on':''}" data-a="nav" data-h="#/requests/queues">${icon('layers',14)}Очереди проектов</button>` : ''}
-    ${isAdmin(u) ? `<button class="ptab ${active==='admin'?'on':''}" data-a="nav" data-h="#/requests/admin">${icon('shield',14)}Администрирование</button>` : ''}
     ${fr(4)}</div>`;
 }
+const trCrumbs = (...rest) => crumbs([['Трекер','#/tasks'], ...rest]);
 
 function listFor(u, kind){
   let l = [];
@@ -49,19 +60,14 @@ function listFor(u, kind){
 function renderList(kind){
   const u = me();
   const rows = listFor(u, kind);
-  const titles = {mine:'Мои заявки', participant:'Я участник запроса', executor:'Я исполнитель'};
+  const titles = {mine:'Мои заявки', participant:'Я участник запроса'};
   const emptyText = {
     mine:'Вы ещё не подавали заявок. Подайте заявку в нужный проект: IT, HR и другие направления.',
-    participant:'Вас пока не добавляли участником запроса ни в одну заявку.',
-    executor:'Вы не исполнитель ни одной заявки.'
+    participant:'Вас пока не добавляли участником запроса ни в одну заявку.'
   };
   let body;
   if (!rows.length) {
     body = `<div class="empty"><div class="eic">${icon('inbox',24)}</div><h4>Заявок нет</h4><p>${emptyText[kind]}</p><button class="btn btn-p" data-a="new-req">${icon('plus',14)}Новая заявка</button>${fr(4)}</div>`;
-  } else if (kind === 'executor') {
-    body = `<table class="tbl"><thead><tr><th>№</th><th>Название</th><th>Проект</th><th>Тип</th><th>Статус</th><th>Заявитель</th><th>Срок</th><th>Создана</th></tr></thead><tbody>
-      ${rows.map(x => `<tr class="rw" data-a="card" data-id="${x.id}"><td class="idn m-hide">#${x.id}</td><td class="tt"><span class="ttx">${esc(x.title)}</span></td><td data-l="Проект">${esc(proj(x.projectId).name)}</td><td data-l="Тип">${esc(typ(x.typeId).name)}</td><td>${stPill(x)}</td><td data-l="Заявитель"><span class="ppl">${av(x.requesterId,18)}${esc(pname(x.requesterId))}</span></td><td data-l="Срок" class="tab-num">${fmtDT(x.deadline)}</td><td data-l="Создана" class="tab-num nowrap">${fmtDT(x.createdAt)}</td></tr>`).join('')}
-      </tbody></table>`;
   } else {
     body = `<table class="tbl"><thead><tr><th>№</th><th>Название</th><th>Проект</th><th>Тип</th><th>Статус</th><th>Создана</th></tr></thead><tbody>
       ${rows.map(x => `<tr class="rw" data-a="card" data-id="${x.id}"><td class="idn m-hide">#${x.id}</td><td class="tt"><span class="ttx">${esc(x.title)}</span></td><td data-l="Проект">${esc(proj(x.projectId).name)}</td><td data-l="Тип">${esc(typ(x.typeId).name)}</td><td>${stPill(x)}</td><td data-l="Создана" class="tab-num nowrap">${fmtDT(x.createdAt)}</td></tr>`).join('')}
@@ -69,42 +75,60 @@ function renderList(kind){
   }
   return `${crumbs([['Трекер','#/tasks'],['Заявки','#/requests/mine'],[titles[kind],'']])}
     <div class="panel">
-      <div class="phead"><h1>${titles[kind]}</h1>${tip({mine:'Здесь только заявки, которые подали вы. Заявки, куда вас добавили участником запроса, — во вкладке «Я участник запроса», а заявки, где вы исполнитель, — во вкладке «Я исполнитель».',
-        participant:'Здесь заявки, куда вас добавили участником запроса. Ваши собственные заявки — во вкладке «Мои заявки».',
-        executor:'Здесь заявки, где вы исполнитель. Ваши собственные заявки — во вкладке «Мои заявки».'}[kind])}${kind!=='executor'?fr('FR-4: без исполнителя и срока'):''}<div class="grow"></div>
+      <div class="phead"><h1>${titles[kind]}</h1>${tip({mine:'Здесь только заявки, которые подали вы. Заявки, куда вас добавили участником запроса, — во вкладке «Я участник запроса», а заявки, где вы исполнитель, — в «Задачи» → «Мои задачи».',
+        participant:'Здесь заявки, куда вас добавили участником запроса. Ваши собственные заявки — во вкладке «Мои заявки».',}[kind])}${fr('FR-4: без исполнителя и срока')}<div class="grow"></div>
         <button class="btn btn-p hide-m" data-a="new-req">${icon('plus',14)}Новая заявка</button></div>
       ${requestsTabs(kind)}
       <div class="pbody">${body}</div>
     </div>`;
 }
 
-function renderQueues(q){
-  const u = me(); q = q || {};
-  const tree = queueTree(u);
-  if (!tree.length) return denied('«Очереди проектов» есть только у руководителей пространств, руководителей и участников заявочных проектов. ' + fr(4));
+const adminActs = (kind, id) => `<button class="ibtn" data-a="admin-edit" data-k="${kind}" data-id="${id}" title="Переименовать, сменить руководителя">${icon('pen',15)}</button><button class="ibtn red" data-a="admin-arch" data-k="${kind}" data-id="${id}" title="В архив">${icon('archive',15)}</button>`;
+const adminRestore = a => { const blocked = a.kind === 'project' && !space(a.data.project.spaceId);
+  return `<button class="ibtn" data-a="admin-restore" data-id="${a.id}" ${blocked ? 'disabled title="Сначала восстановите пространство"' : 'title="Восстановить"'}>${icon('undo',15)}</button>`; };
+const archOf = kind => isAdmin(me()) && UI.showArch ? S.arch.filter(a => a.kind === kind) : [];
+const archSwitch = () => isAdmin(me()) ? `<label class="switch"><input type="checkbox" data-c="admin-arch-show" ${UI.showArch?'checked':''}><span class="tr"></span>Показывать архивные${S.arch.length ? `<span class="cbadge">${S.arch.length}</span>` : ''}</label>` : '';
+const openCounts = pids => { const open = S.requests.filter(r => pids.includes(r.projectId) && !isDone(r)); return {open: open.length, noEx: open.filter(r => !r.executorIds.length).length}; };
+const noExPill = n => n ? `<span class="pill p-yel">${n}</span>` : '<span class="muted">—</span>';
+
+/* «Все пространства»: ordinary task spaces and request spaces side by side; the admin manages request spaces here (FR-1) */
+function renderSpaces(){
+  const u = me(), admin = isAdmin(u), tree = queueTree(u);
+  const stub = (n, lead) => `<tr class="stub-row"><td class="tt"><span class="ttx">${n}</span></td><td>${lead}</td><td class="muted" colspan="3">обычное пространство задач</td><td></td></tr>`;
+  const rows = tree.map(({space: s}) => { const ps = spaceProjectsFor(u, s.id), c = openCounts(ps.map(p => p.id));
+    return `<tr class="rw" data-a="nav" data-h="#/spaces/${s.id}"><td class="tt"><span class="ttx">${esc(s.name)}</span></td><td>${esc(pname(s.leadId))}</td><td class="tab-num">${ps.length}</td><td class="tab-num">${c.open}</td><td>${noExPill(c.noEx)}</td>
+      <td class="acol nowrap">${canCreateProject(u, s.id) ? `<button class="btn btn-g btn-sm" data-a="admin-new" data-v="project" data-sid="${s.id}">${icon('plus',13)}Проект</button>` : ''}${canSpaceSettings(u, s.id) ? `<button class="ibtn" data-a="sp-open" data-sid="${s.id}" data-tab="general" title="Настройки пространства">${icon('gear',15)}</button>` : ''}${admin ? adminActs('space', s.id) : ''}</td></tr>`; }).join('');
+  const arch = archOf('space').map(a => `<tr class="trashed"><td class="tt"><span class="ttx">${esc(a.data.space.name)}</span> <span class="pill p-grey">В архиве</span></td><td>${esc(pname(a.data.space.leadId))}</td><td class="tab-num">${a.data.projects.length}</td><td></td><td></td><td class="acol">${adminRestore(a)}</td></tr>`).join('');
+  return `${trCrumbs(['Все пространства',''])}
+    <div class="panel"><div class="phead"><h1>Все пространства</h1>${fr(1,17)}<div class="grow"></div>
+      ${admin ? `<button class="btn btn-n" data-a="admin-new" data-v="space">${icon('plus',14)}Новое пространство</button><button class="btn btn-p" data-a="admin-new" data-v="project">${icon('plus',14)}Новый проект</button>` : ''}</div>
+    <div class="pbody pad"><div style="display:flex;align-items:flex-start;gap:12px;margin:0 0 12px"><div class="note ph" style="flex:1">Пространства с заявками — обычные пространства трекера. Их видят руководитель пространства, руководители и участники проектов и администратор. ${admin ? 'Администратор создаёт, переименовывает и архивирует их здесь.' : ''}</div>${archSwitch()}</div>
+      <div class="tblw"><table class="tbl"><thead><tr><th>Пространство</th><th>Руководитель пространства</th><th>Проектов</th><th>Заявок в работе</th><th>Без исполнителя</th><th></th></tr></thead><tbody>
+        ${stub('Мое пространство', esc(pname(u)))}${stub('IT CP', '—')}${rows}${arch}</tbody></table></div></div></div>`;
+}
+
+/* «Проекты»: projects of all spaces; request projects show their queue counters */
+function renderProjects(q){
+  const u = me(), admin = isAdmin(u), tree = queueTree(u); q = q || {};
   const sel = q.space ? tree.find(x => x.space.id === q.space) : null;
   const rows = (sel ? [sel] : tree).flatMap(x => x.projects.map(p => ({x, p})));
-  const toolbar = `<div class="toolbar"><select class="sel sel-sm" data-c="flt" data-k="space"><option value="">Все пространства</option>${tree.map(x => `<option value="${x.space.id}" ${q.space===x.space.id?'selected':''}>${esc(x.space.name)}</option>`).join('')}</select>
-    ${sel ? `<span class="muted" style="font-size:12px">Руководитель пространства: ${esc(pname(sel.space.leadId))}</span><div style="flex:1"></div>
-      <button class="btn btn-s btn-sm" data-a="nav" data-h="#/requests/queues/space/${sel.space.id}">${icon('list',13)}Все заявки пространства</button>
-      ${canSpaceSettings(u, sel.space.id) ? `<button class="btn btn-n btn-sm" data-a="sp-open" data-sid="${sel.space.id}" data-tab="general">${icon('gear',13)}Настройки пространства</button>` : ''}` : ''}</div>`;
-  const body = rows.length ? `<table class="tbl"><thead><tr><th>Проект</th><th>Пространство</th><th class="hide-m">Ваша роль</th><th>Типов заявок</th><th>В работе</th><th>Без исполнителя</th><th></th></tr></thead><tbody>
-    ${rows.map(({x, p}) => {
-      const open = S.requests.filter(r => r.projectId === p.id && !isDone(r)); const noEx = open.filter(r => !r.executorIds.length);
-      const role = p.leadId === u ? 'руководитель проекта' : p.memberIds.includes(u) ? 'участник проекта' : x.lead ? 'руководитель пространства' : 'администратор';
-      return `<tr class="rw" data-a="nav" data-h="#/requests/queues/project/${p.id}">
-        <td class="tt"><span class="ttx">${esc(p.name)}</span></td>
-        <td><button class="lnk" data-a="nav" data-h="#/requests/queues/space/${x.space.id}" title="Все заявки пространства">${esc(x.space.name)}</button></td>
-        <td class="hide-m t2">${role}</td>
-        <td class="tab-num">${visibleTypes(p.id).length}</td>
-        <td class="tab-num">${open.length}</td>
-        <td>${noEx.length ? `<span class="pill p-yel">${noEx.length}</span>` : '<span class="muted">—</span>'}</td>
-        <td class="acol">${canProjSettings(u, p.id) ? `<button class="ibtn" data-a="pj-open" data-pid="${p.id}" data-tab="types" title="Настройки проекта">${icon('gear',15)}</button>` : ''}</td></tr>`;
-    }).join('')}</tbody></table>`
-    : `<div class="empty"><div class="eic">${icon('clip',24)}</div><h4>Проектов нет</h4><p>В пространстве пока нет проектов. Проекты создаёт администратор или руководитель этого пространства ${fr(1)}</p></div>`;
-  return `${crumbs([['Трекер','#/tasks'],['Заявки','#/requests/mine'],['Очереди проектов','']])}
-    <div class="panel"><div class="phead"><h1>Очереди проектов</h1>${fr(4)}<div class="grow"></div><button class="btn btn-p hide-m" data-a="new-req">${icon('plus',14)}Новая заявка</button></div>
-    ${requestsTabs('queues')}${toolbar}<div class="pbody">${body}</div></div>`;
+  const stub = (n, sp) => `<tr class="stub-row"><td class="tt"><span class="ttx">${n}</span></td><td>${sp}</td><td class="hide-m muted" colspan="4">обычный проект задач</td><td></td></tr>`;
+  const toolbar = tree.length ? `<div class="toolbar"><select class="sel sel-sm" data-c="flt" data-k="space"><option value="">Все пространства</option>${tree.map(x => `<option value="${x.space.id}" ${q.space===x.space.id?'selected':''}>${esc(x.space.name)}</option>`).join('')}</select>
+    ${sel ? `<span class="muted" style="font-size:12px">Руководитель пространства: ${esc(pname(sel.space.leadId))}</span>` : ''}<div style="flex:1"></div>${archSwitch()}</div>` : '';
+  const body = rows.map(({x, p}) => { const c = openCounts([p.id]);
+    const role = p.leadId === u ? 'руководитель проекта' : p.memberIds.includes(u) ? 'участник проекта' : x.lead ? 'руководитель пространства' : 'администратор';
+    return `<tr class="rw" data-a="nav" data-h="#/projects/${p.id}">
+      <td class="tt"><span class="ttx">${esc(p.name)}</span></td>
+      <td><button class="lnk" data-a="nav" data-h="#/spaces/${x.space.id}" title="Открыть пространство">${esc(x.space.name)}</button></td>
+      <td class="hide-m t2">${role}</td><td class="tab-num">${visibleTypes(p.id).length}</td><td class="tab-num">${c.open}</td><td>${noExPill(c.noEx)}</td>
+      <td class="acol nowrap">${canProjSettings(u, p.id) ? `<button class="ibtn" data-a="pj-open" data-pid="${p.id}" data-tab="types" title="Настройки проекта">${icon('gear',15)}</button>` : ''}${admin ? adminActs('project', p.id) : ''}</td></tr>`; }).join('');
+  const arch = archOf('project').map(a => { const p = a.data.project, sp = space(p.spaceId) || (S.arch.find(x => x.kind === 'space' && x.data.space.id === p.spaceId) || {data:{space:{name:'—'}}}).data.space;
+    return `<tr class="trashed"><td class="tt"><span class="ttx">${esc(p.name)}</span> <span class="pill p-grey">В архиве</span></td><td>${esc(sp.name)}</td><td class="hide-m"></td><td class="tab-num">${a.data.types.filter(t => !t.hidden).length}</td><td></td><td></td><td class="acol">${adminRestore(a)}</td></tr>`; }).join('');
+  return `${trCrumbs(['Проекты',''])}
+    <div class="panel"><div class="phead"><h1>Проекты</h1>${fr(4)}<div class="grow"></div>
+      ${admin ? `<button class="btn btn-p" data-a="admin-new" data-v="project">${icon('plus',14)}Новый проект</button>` : ''}</div>
+    ${toolbar}<div class="pbody"><table class="tbl"><thead><tr><th>Проект</th><th>Пространство</th><th class="hide-m">Ваша роль</th><th>Типов заявок</th><th>Заявок в работе</th><th>Без исполнителя</th><th></th></tr></thead><tbody>
+      ${sel ? '' : stub('Мой проект', 'Мое пространство') + stub('IT CP', 'IT CP')}${body}${arch}</tbody></table></div></div>`;
 }
 
 function applyFilters(list, q){
@@ -158,12 +182,12 @@ function kanban(list, sp){
 function renderProjectQueue(pid, q){
   const u = me(); const p = proj(pid);
   if (!p) return denied('Проект не найден.');
-  if (!canView(u, pid)) return denied('Очередь проекта видна только руководителю пространства, руководителю и участникам проекта, а также администратору. ' + fr(17,19));
+  if (!canView(u, pid)) return denied('Заявки проекта видны только руководителю пространства, руководителю и участникам проекта, а также администратору. ' + fr(17,19));
   const s = space(p.spaceId);
   const view = q.view || 'list';
   const list = applyFilters(S.requests.filter(x => x.projectId === pid), q).sort((a,b) => b.createdAt.localeCompare(a.createdAt));
   const subKey = u + ':' + pid;
-  return `${crumbs([['Трекер','#/tasks'],['Заявки','#/requests/mine'],['Очереди проектов','#/requests/queues'],[s.name,'#/requests/queues'],[p.name,'']])}
+  return `${trCrumbs(['Все пространства','#/spaces'],[s.name,'#/spaces/'+s.id],[p.name,''])}
     <div class="panel">
       <div class="phead"><h1>${esc(p.name)}</h1><span class="muted hide-m">Пространство ${esc(s.name)} · руководитель проекта ${esc(pname(p.leadId))}</span>
         <div class="grow"></div>
@@ -186,7 +210,7 @@ function renderSpaceQueue(sid, q){
   if (!s) return denied('Пространство не найдено.');
   const ps = spaceProjectsFor(u, sid);
   if (!ps.length && !(isSpaceLead(u, sid) || isAdmin(u))) return denied('Пространство видят руководитель пространства, руководители и участники его проектов. ' + fr(17));
-  if (!ps.length) return `${crumbs([['Трекер','#/tasks'],['Заявки','#/requests/mine'],['Очереди проектов','#/requests/queues'],[s.name,'']])}
+  if (!ps.length) return `${trCrumbs(['Все пространства','#/spaces'],[s.name,''])}
     <div class="panel"><div class="phead"><h1>${esc(s.name)}</h1><span class="muted hide-m">Руководитель пространства: ${esc(pname(s.leadId))}</span>${fr(17)}</div>
       <div class="empty"><div class="eic">${icon('clip',24)}</div><h4>Проектов пока нет</h4><p>В пространстве ${esc(s.name)} ещё не создан ни один заявочный проект. Проекты создаёт администратор или руководитель этого пространства ${fr(1)}</p>
         ${canSpaceSettings(u, sid) ? `<button class="btn btn-n" data-a="sp-open" data-sid="${sid}" data-tab="general">${icon('gear',14)}Настройки пространства</button>` : ''}
@@ -194,7 +218,7 @@ function renderSpaceQueue(sid, q){
   const lead = isSpaceLead(u, sid);
   const pids = ps.map(p => p.id);
   const list = applyFilters(S.requests.filter(x => pids.includes(x.projectId)), q).sort((a,b) => b.createdAt.localeCompare(a.createdAt));
-  return `${crumbs([['Трекер','#/tasks'],['Заявки','#/requests/mine'],['Очереди проектов','#/requests/queues'],[s.name,'']])}
+  return `${trCrumbs(['Все пространства','#/spaces'],[s.name,''])}
     <div class="panel">
       <div class="phead"><h1>${esc(s.name)}</h1><span class="muted hide-m">Руководитель пространства: ${esc(pname(s.leadId))}</span>${fr(17)}
         <span class="note ph" style="padding:3px 8px">${lead ? 'Вы руководитель пространства: видны заявки всех проектов' : isAdmin(u) ? 'Вы администратор: видны и доступны для работы заявки всех проектов' : 'Видны заявки только тех проектов, где вы руководитель или участник'}. Допущение прототипа</span>
@@ -219,7 +243,7 @@ function openSpaceModal(sid, tab){
 }
 function closeSpaceModal(){
   const sid = UI.spModal && UI.spModal.sid; UI.spModal = null;
-  if (/^#\/requests\/space\/[^/]+\/settings/.test(location.hash)) location.hash = '#/requests/queues/space/' + sid; else render();
+  if (/^#\/spaces\/[^/]+\/settings/.test(location.hash)) location.hash = '#/spaces/' + sid; else render();
 }
 const optUsage = (fid, o) => S.requests.filter(r => { const v = r.values[fid]; return Array.isArray(v) ? v.includes(o) : v === o; }).length;
 const fieldUsage = fid => S.types.filter(t => t.fields.some(x => x.f === fid)).length;
@@ -344,7 +368,7 @@ function openProjModal(pid, tab){
 }
 function closeProjModal(){
   const pid = UI.pjModal && UI.pjModal.pid; UI.pjModal = null; UI.typeDraft = null;
-  if (/^#\/requests\/project\/[^/]+\/settings/.test(location.hash)) location.hash = '#/requests/queues/project/' + pid; else render();
+  if (/^#\/projects\/[^/]+\/settings/.test(location.hash)) location.hash = '#/projects/' + pid; else render();
 }
 function projMenu(p, lead){
   return `<div class="ddm" data-stop="1">
@@ -432,31 +456,6 @@ function renderProjModal(){
 }
 
 /* ---------- admin (FR-1) ---------- */
-function renderAdmin(){
-  const u = me();
-  if (!isAdmin(u)) return denied('Раздел доступен только администратору портала. ' + fr(1));
-  const showArch = !!UI.showArch;
-  const archOf = kind => showArch ? S.arch.filter(a => a.kind === kind) : [];
-  const acts = (kind, id) => `<button class="ibtn" data-a="admin-edit" data-k="${kind}" data-id="${id}" title="Переименовать, сменить руководителя">${icon('pen',15)}</button><button class="ibtn red" data-a="admin-arch" data-k="${kind}" data-id="${id}" title="В архив">${icon('archive',15)}</button>`;
-  const restore = a => { const blocked = a.kind === 'project' && !space(a.data.project.spaceId);
-    return `<button class="ibtn" data-a="admin-restore" data-id="${a.id}" ${blocked ? 'disabled title="Сначала восстановите пространство"' : 'title="Восстановить"'}>${icon('undo',15)}</button>`; };
-  const spaces = `<table class="tbl"><thead><tr><th>Пространство</th><th>Руководитель пространства</th><th>Проектов</th><th></th></tr></thead><tbody>
-    ${S.spaces.map(s => `<tr><td class="tt"><span class="ttx">${esc(s.name)}</span></td><td>${esc(pname(s.leadId))}</td><td class="tab-num">${S.projects.filter(p => p.spaceId === s.id).length}</td>
-      <td class="acol nowrap"><button class="btn btn-g btn-sm" data-a="admin-new" data-v="project" data-sid="${s.id}">${icon('plus',13)}Проект</button>${acts('space', s.id)}</td></tr>`).join('')}
-    ${archOf('space').map(a => `<tr class="trashed"><td class="tt"><span class="ttx">${esc(a.data.space.name)}</span> <span class="pill p-grey">В архиве</span></td><td>${esc(pname(a.data.space.leadId))}</td><td class="tab-num">${a.data.projects.length}</td><td class="acol">${restore(a)}</td></tr>`).join('')}</tbody></table>`;
-  const projects = S.projects.length || archOf('project').length ? `<table class="tbl"><thead><tr><th>Проект</th><th>Пространство</th><th>Руководитель проекта</th><th>Участников</th><th>Типов</th><th></th></tr></thead><tbody>
-    ${S.projects.map(p => `<tr><td class="tt"><span class="ttx">${esc(p.name)}</span></td><td>${esc(space(p.spaceId).name)}</td><td>${esc(pname(p.leadId))}</td><td class="tab-num">${p.memberIds.length}</td><td class="tab-num">${visibleTypes(p.id).length}</td><td class="acol nowrap">${acts('project', p.id)}</td></tr>`).join('')}
-    ${archOf('project').map(a => { const p = a.data.project, sp = space(p.spaceId) || (S.arch.find(x => x.kind === 'space' && x.data.space.id === p.spaceId) || {data:{space:{name:'—'}}}).data.space;
-      return `<tr class="trashed"><td class="tt"><span class="ttx">${esc(p.name)}</span> <span class="pill p-grey">В архиве</span></td><td>${esc(sp.name)}</td><td>${esc(pname(p.leadId))}</td><td class="tab-num">${p.memberIds.length}</td><td class="tab-num">${a.data.types.filter(t => !t.hidden).length}</td><td class="acol">${restore(a)}</td></tr>`; }).join('')}</tbody></table>`
-    : `<div class="pad muted">Проектов пока нет</div>`;
-  return `${crumbs([['Трекер','#/tasks'],['Заявки','#/requests/mine'],['Администрирование','']])}
-    <div class="panel"><div class="phead"><h1>Администрирование заявок</h1>${fr(1)}<div class="grow"></div>
-      <button class="btn btn-n" data-a="admin-new" data-v="space">${icon('plus',14)}Новое пространство</button><button class="btn btn-p" data-a="admin-new" data-v="project">${icon('plus',14)}Новый проект</button></div>${requestsTabs('admin')}
-    <div class="pbody pad"><div style="display:flex;align-items:flex-start;gap:12px;margin:0 0 12px"><div class="hint" style="margin:0;flex:1">Здесь администратор создаёт, переименовывает и архивирует заявочные пространства и проекты и меняет их руководителей. Ему доступны все настройки: статусы и поля пространства, типы заявок, состав проекта и исполнители по умолчанию. Открыть настройки можно из дерева слева или очереди ${fr(1,17)}</div>
-      <label class="switch"><input type="checkbox" data-c="admin-arch-show" ${UI.showArch?'checked':''}><span class="tr"></span>Показывать архивные${S.arch.length ? `<span class="cbadge">${S.arch.length}</span>` : ''}</label></div>
-      <h3 class="sect">Пространства<span class="cnt">${S.spaces.length}</span></h3><div class="tblw">${spaces}</div>
-      <h3 class="sect" style="margin-top:18px">Проекты<span class="cnt">${S.projects.length}</span></h3><div class="tblw">${projects}</div></div></div>`;
-}
 function renderAdminEdit(){
   const d = UI.adminEdit, e = d.err || {};
   const o = d.kind === 'space' ? space(d.id) : proj(d.id);
@@ -515,21 +514,22 @@ function renderAdminNew(){
 }
 
 /* ---------- ordinary tracker stubs (FR-5) ---------- */
+/* «Мои задачи»: a request is an ordinary task of its project; the executor sees it here only with the «Показывать заявки» filter */
+function renderTasks(q){
+  const u = me(), show = q.requests === '1';
+  const reqs = !show ? [] : listFor(u, 'executor').sort((a, b) => isDone(a) - isDone(b));
+  const last = r => r.history.length ? r.history[r.history.length - 1].at : r.createdAt;
+  const reqRows = reqs.map(x => `<tr class="rw" data-a="card" data-id="${x.id}"><td class="tt"><span class="ttx">${esc(x.title)}</span></td><td><span class="muted">—</span></td><td>${stPill(x)}</td>
+    <td>${esc(pname(x.requesterId))}</td><td>${x.executorIds.map(pname).map(esc).join(', ')}</td><td class="tab-num">${fmtDT(last(x))}</td></tr>`).join('');
+  const taskRows = ORDINARY_TASKS.map(t => `<tr class="stub-row"><td class="tt"><span class="ttx">${esc(t.t)}</span></td><td><span class="pill ${t.p==='Средний'?'p-yel':'p-red'}">${t.p}</span></td><td><span class="pill ${t.st==='Ждёт проверки'?'p-yel':'st-open'}">${t.st}</span></td><td>${esc(t.o)}</td><td>${esc(t.a)}</td><td class="tab-num">${t.d}</td></tr>`).join('');
+  return `${trCrumbs(['Мои задачи',''])}<div class="panel"><div class="phead"><h1>Мои задачи</h1><div class="grow"></div><button class="btn btn-p">${icon('plus',14)}Задача</button></div><div class="pbody">
+    <div class="toolbar"><span class="btn btn-o btn-sm">Вручную</span><span class="btn btn-o btn-sm">Статусы: 3</span><span class="btn btn-o btn-sm">Мой статус: 3</span>
+      <label class="chk"><input type="checkbox" data-c="tasks-requests" ${show?'checked':''}>Показывать заявки</label>
+      <span class="note info ph" style="padding:3px 8px">Заявки разбирают в проекте пространства. Здесь заявки, где вы исполнитель, видны только с фильтром «Показывать заявки». Меняет FR-5</span></div>
+    <table class="tbl"><thead><tr><th>Название</th><th>Приоритет</th><th>Статус</th><th>Постановщик</th><th>Ответственный</th><th>Последняя активность</th></tr></thead><tbody>${reqRows}${taskRows}</tbody></table>
+    <div class="pad muted">Строка «+ Добавить задачу» работает как сейчас: это обычные проекты ${fr(11)}</div></div></div>`;
+}
 function renderStub(sec){
   const names = {tasks:'Мои задачи', projects:'Проекты', spaces:'Все пространства', activity:'Активность', stats:'Статистика', checklists:'Чек-листы', notes:'Заметки', mindmaps:'Mind Maps', settings:'Настройки трекера'};
-  let body;
-  if (sec === 'tasks') {
-    body = `<div class="toolbar"><span class="btn btn-o btn-sm">Вручную</span><span class="btn btn-o btn-sm">Статусы: 3</span><span class="btn btn-o btn-sm">Мой статус: 3</span>
-      <span class="note info ph" style="padding:3px 8px">Заявок пользователя здесь нет: ни поданных, ни тех, где он исполнитель ${fr(5)}</span></div>
-      <table class="tbl"><thead><tr><th>Название</th><th>Приоритет</th><th>Статус</th><th>Постановщик</th><th>Ответственный</th><th>Последняя активность</th></tr></thead><tbody>
-      ${ORDINARY_TASKS.map(t => `<tr class="stub-row"><td class="tt"><span class="ttx">${esc(t.t)}</span></td><td><span class="pill ${t.p==='Средний'?'p-yel':'p-red'}">${t.p}</span></td><td><span class="pill ${t.st==='Ждёт проверки'?'p-yel':'st-open'}">${t.st}</span></td><td>${esc(t.o)}</td><td>${esc(t.a)}</td><td class="tab-num">${t.d}</td></tr>`).join('')}
-      </tbody></table><div class="pad muted">Строка «+ Добавить задачу» работает как сейчас: это обычные проекты ${fr(11)}</div>`;
-  } else if (sec === 'spaces' || sec === 'projects') {
-    const items = sec === 'spaces' ? ['Мое пространство','IT CP'] : ['Мой проект','IT CP'];
-    body = `<div class="pad"><div class="grid2">${items.map(n => `<div class="box"><div class="boxh">${icon(sec==='spaces'?'disc':'clip',16)}<h3>${n}</h3></div><div class="boxb muted">Обычное ${sec==='spaces'?'пространство':'проект'} задач</div></div>`).join('')}</div>
-      <div class="note info ph" style="margin-top:12px">Заявочных пространств IT и HR и их проектов здесь нет. Они видны только в «Заявки» → «Очереди проектов» ${fr(5)}</div></div>`;
-  } else {
-    body = `<div class="empty"><div class="eic">${icon('layers',24)}</div><h4>${names[sec]}</h4><p>Экран трекера без изменений. Заявок здесь нет ${['activity','stats'].includes(sec) ? fr(5) : ''}</p></div>`;
-  }
-  return `${crumbs([['Трекер','#/tasks'],[names[sec]||sec,'']])}<div class="panel"><div class="phead"><h1>${names[sec]||sec}</h1><div class="grow"></div>${sec==='tasks'?`<button class="btn btn-p">${icon('plus',14)}Задача</button>`:''}</div><div class="pbody">${body}</div></div>`;
+  return `${trCrumbs([names[sec]||sec,''])}<div class="panel"><div class="phead"><h1>${names[sec]||sec}</h1></div><div class="pbody"><div class="empty"><div class="eic">${icon('layers',24)}</div><h4>${names[sec]}</h4><p>Экран трекера без изменений</p></div></div></div>`;
 }

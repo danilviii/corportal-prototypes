@@ -43,7 +43,7 @@ function renderApp(){
       <button title="Поиск">${icon('search',17)}</button>
       <button title="Пульс">${icon('pulse',17)}</button>
       <button title="Согласования">${icon('stamp',17)}</button>
-      <button class="on" title="Задачи" data-a="nav" data-h="#/requests/mine">${icon('check',17)}</button>
+      <button class="on" title="Трекер" data-a="nav" data-h="#/tasks">${icon('check',17)}</button>
       <button title="Магазин и каталог">${icon('cart',17)}</button>
       <button title="Обучение">${icon('cap',17)}</button>
       <button title="Сотрудники">${icon('users',17)}</button>
@@ -83,31 +83,29 @@ function renderSide(r, sec){
   let below = '';
   if (sec === 'requests') {
     const v = r.parts[1] || 'mine';
-    const tree = queueTree(u);
     const cnt = k => listFor(u, k).length;
     below = `
       <button class="mi on" data-a="nav" data-h="#/requests/mine">${icon('inbox',15)}Заявки</button>
       <button class="sub ${v==='mine'?'on':''}" data-a="nav" data-h="#/requests/mine">Мои заявки <span class="muted">${cnt('mine')}</span></button>
       <button class="sub ${v==='participant'?'on':''}" data-a="nav" data-h="#/requests/participant">Я участник запроса <span class="muted">${cnt('participant')}</span></button>
-      <button class="sub ${v==='executor'?'on':''}" data-a="nav" data-h="#/requests/executor">Я исполнитель <span class="muted">${cnt('executor')}</span></button>
-      ${tree.length ? `<button class="sub ${['queues','space','project'].includes(v)?'on':''}" data-a="nav" data-h="#/requests/queues">Очереди проектов</button>
-        ${tree.map(t => `<div class="srow ${r.path==='/requests/queues/space/'+t.space.id?'on':''}">
-            <button class="sname" data-a="nav" data-h="#/requests/queues/space/${t.space.id}" title="Открыть пространство">${icon('disc',14)}<span class="ttx">${esc(t.space.name)}</span></button>
-            <button class="dots ${UI.spMenu===t.space.id?'on':''}" data-a="sp-menu" data-sid="${t.space.id}" title="Действия с пространством">${icon('dots',15)}</button>
-            ${UI.spMenu===t.space.id ? spaceMenu(t.space, canSpaceSettings(u, t.space.id)) : ''}</div>
-          <div class="stree">${t.projects.map(p => `<div class="srow lvl2 ${r.parts[2]==='project'&&r.parts[3]===p.id?'on':''}">
-            <button class="sname" data-a="nav" data-h="#/requests/queues/project/${p.id}" title="Открыть очередь проекта"><span class="ttx">${esc(p.name)}</span></button>
-            <button class="dots ${UI.pjMenu===p.id?'on':''}" data-a="pj-menu" data-pid="${p.id}" title="Действия с проектом">${icon('dots',15)}</button>
-            ${UI.pjMenu===p.id ? projMenu(p, canProjSettings(u, p.id)) : ''}</div>`).join('')}</div>`).join('')}` : ''}
-      ${isAdmin(u) ? `<div class="hr"></div><button class="sub ${v==='admin'?'on':''}" data-a="nav" data-h="#/requests/admin">Администрирование заявок</button>` : ''}`;
+      <div class="note ph" style="margin-top:10px">«Заявки» — только интерфейс заявителя. Заявки разбирают в «Задачах», в пространствах и проектах</div>`;
   } else {
+    const tree = queueTree(u);
     below = `
-      <button class="mi on">${icon('check',15)}Мои задачи</button>
-      <button class="sub on">Список</button><button class="sub">Мой план</button><button class="sub">Сроки</button><button class="sub">Календарь</button>
+      <button class="mi ${sec==='tasks'?'on':''}" data-a="nav" data-h="#/tasks">${icon('check',15)}Мои задачи</button>
+      <button class="sub ${sec==='tasks'?'on':''}" data-a="nav" data-h="#/tasks">Список</button><button class="sub">Мой план</button><button class="sub">Сроки</button><button class="sub">Календарь</button>
       <div class="sgrp">Избранные</div><div class="sbox muted">Добавить в избранное</div>
       <div class="sgrp">Мои пространства 1</div><div class="sub">Мое пространство</div><div class="sub lvl2">Мой проект</div>
-      <div class="sgrp">Общие пространства 1</div><div class="sub">IT CP</div><div class="sub lvl2">IT CP</div>
-      <div class="note ph" style="margin-top:10px">Заявочных пространств IT и HR в дереве нет ${fr(5)}</div>`;
+      <div class="sgrp">Общие пространства ${1 + tree.length}</div><div class="sub">IT CP</div><div class="sub lvl2">IT CP</div>
+      ${tree.map(t => `<div class="srow ${r.path==='/spaces/'+t.space.id?'on':''}">
+          <button class="sname" data-a="nav" data-h="#/spaces/${t.space.id}" title="Открыть пространство">${icon('disc',14)}<span class="ttx">${esc(t.space.name)}</span></button>
+          <button class="dots ${UI.spMenu===t.space.id?'on':''}" data-a="sp-menu" data-sid="${t.space.id}" title="Действия с пространством">${icon('dots',15)}</button>
+          ${UI.spMenu===t.space.id ? spaceMenu(t.space, canSpaceSettings(u, t.space.id)) : ''}</div>
+        <div class="stree">${t.projects.map(p => `<div class="srow lvl2 ${r.parts[0]==='projects'&&r.parts[1]===p.id?'on':''}">
+          <button class="sname" data-a="nav" data-h="#/projects/${p.id}" title="Открыть проект"><span class="ttx">${esc(p.name)}</span></button>
+          <button class="dots ${UI.pjMenu===p.id?'on':''}" data-a="pj-menu" data-pid="${p.id}" title="Действия с проектом">${icon('dots',15)}</button>
+          ${UI.pjMenu===p.id ? projMenu(p, canProjSettings(u, p.id)) : ''}</div>`).join('')}</div>`).join('')}
+      ${tree.length ? `<div class="note ph" style="margin-top:10px">Пространства IT и HR видят их руководители, руководители и участники проектов и администратор</div>` : ''}`;
   }
   return `<aside class="side"><h3>Трекер <span class="muted">${icon('left',14)}</span></h3>${menu}<div class="hr"></div>${below}</aside>`;
 }
@@ -124,13 +122,12 @@ function spaceMenu(s, lead){
   </div>`;
 }
 function renderMobileHead(r){
-  const u = me(); const v = r.parts[1] || 'mine';
-  const tabs = [['mine','Мои заявки'],['participant','Я участник запроса'],['executor','Я исполнитель']];
-  if (queueTree(u).length) tabs.push(['queues','Очереди']);
+  const sec = r.parts[0] || 'requests', v = r.parts[1] || 'mine';
+  const tabs = sec === 'requests' ? [['mine','Мои заявки'],['participant','Я участник запроса']] : [];
   return `<div class="mhead">
-    <div class="mt"><button class="btn btn-n btn-i btn-sm">${icon('menu',15)}</button><b>Заявки</b>
+    <div class="mt"><button class="btn btn-n btn-i btn-sm">${icon('menu',15)}</button><b>${sec === 'requests' ? 'Заявки' : 'Трекер'}</b>
       <button class="btn btn-n btn-i btn-sm" data-a="notif" style="position:relative">${icon('bell',15)}${unreadCount()?`<span class="badge" style="top:-4px;right:-4px">${unreadCount()}</span>`:''}</button>
       <button class="btn btn-p btn-sm" data-a="new-req">${icon('plus',13)}Заявка</button></div>
-    <div class="mnav">${tabs.map(([k,l]) => `<button class="ptab ${v===k||(k==='queues'&&['space','project'].includes(v))?'on':''}" data-a="nav" data-h="#/requests/${k}">${l}</button>`).join('')}</div>
+    ${tabs.length ? `<div class="mnav">${tabs.map(([k,l]) => `<button class="ptab ${v===k?'on':''}" data-a="nav" data-h="#/requests/${k}">${l}</button>`).join('')}</div>` : ''}
   </div>`;
 }
