@@ -80,18 +80,9 @@ function renderSide(r, sec){
     ['activity','Активность','activity'],['stats','Статистика','chart'],['checklists','Чек-листы','circlecheck'],['notes','Заметки','pen'],['mindmaps','Mind Maps','brain'],['settings','Настройки','gear']
   ];
   const menu = items.map(([k,l,i]) => `<button class="mi ${sec===k?'on':''}" data-a="nav" data-h="${k==='requests'?'#/requests/mine':'#/'+k}">${icon(i,15)}${l}${k==='requests'?fr(3):''}</button>`).join('');
-  let below = '';
-  if (sec === 'requests') {
-    const v = r.parts[1] || 'mine';
-    const cnt = k => listFor(u, k).length;
-    below = `
-      <button class="mi on" data-a="nav" data-h="#/requests/mine">${icon('inbox',15)}Заявки</button>
-      <button class="sub ${v==='mine'?'on':''}" data-a="nav" data-h="#/requests/mine">Мои заявки <span class="muted">${cnt('mine')}</span></button>
-      <button class="sub ${v==='participant'?'on':''}" data-a="nav" data-h="#/requests/participant">Я участник запроса <span class="muted">${cnt('participant')}</span></button>
-      <div class="note ph" style="margin-top:10px">«Заявки» — только интерфейс заявителя. Заявки разбирают в «Задачах», в пространствах и проектах</div>`;
-  } else {
-    const tree = queueTree(u);
-    below = `
+  /* The lower part is the same in every tracker section, «Заявки» included: tasks, spaces and projects */
+  const tree = queueTree(u);
+  const below = `
       <button class="mi ${sec==='tasks'?'on':''}" data-a="nav" data-h="#/tasks">${icon('check',15)}Мои задачи</button>
       <button class="sub ${sec==='tasks'?'on':''}" data-a="nav" data-h="#/tasks">Список</button><button class="sub">Мой план</button><button class="sub">Сроки</button><button class="sub">Календарь</button>
       <div class="sgrp">Избранные</div><div class="sbox muted">Добавить в избранное</div>
@@ -106,7 +97,6 @@ function renderSide(r, sec){
           <button class="dots ${UI.pjMenu===p.id?'on':''}" data-a="pj-menu" data-pid="${p.id}" title="Действия с проектом">${icon('dots',15)}</button>
           ${UI.pjMenu===p.id ? projMenu(p, canProjSettings(u, p.id)) : ''}</div>`).join('')}</div>`).join('')}
       ${tree.length ? `<div class="note ph" style="margin-top:10px">Пространства IT и HR видят их руководители, руководители и участники проектов и администратор</div>` : ''}`;
-  }
   return `<aside class="side"><h3>Трекер <span class="muted">${icon('left',14)}</span></h3>${menu}<div class="hr"></div>${below}</aside>`;
 }
 
